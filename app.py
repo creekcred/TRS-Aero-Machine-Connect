@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from werkzeug.utils import secure_filename
 import os
 from ftplib import FTP
 
@@ -16,13 +17,25 @@ jobs = [
 ]
 
 # Configuration for file uploads
-UPLOAD_FOLDER = '/ftp_directory'
+UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Ensure the upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Helper function to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'trimas_aerospace-logo-220.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/api/machines', methods=['GET'])
 def get_machines():
@@ -34,7 +47,6 @@ def get_jobs():
 
 @app.route('/api/files/upload', methods=['POST'])
 def upload_file():
-    # Check if the post request has the file part
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
     file = request.files['file']
@@ -50,11 +62,10 @@ def upload_file():
 # FTP upload function
 def upload_file_to_ftp(file_path, ftp_url, username, password):
     try:
-        ftp = FTP(ftp_url)
-        ftp.login(user=username, passwd=password)
-        with open(file_path, 'rb') as file:
-            ftp.storbinary(f'STOR {os.path.basename(file_path)}', file)
-        ftp.quit()
+        with FTP(ftp_url) as ftp:
+            ftp.login(user=username, passwd=password)
+            with open(file_path, 'rb') as file:
+                ftp.storbinary(f'STOR {os.path.basename(file_path)}', file)
         return True
     except Exception as e:
         print(f"FTP upload failed: {e}")
